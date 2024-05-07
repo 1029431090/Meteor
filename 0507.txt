@@ -1,0 +1,26 @@
+ef remove_non_continuous_elements(lst):
+    # 将十六进制字符串转换为整数
+    nums = [int(x, 16) for x in lst]
+
+    # 找出连续性的元素
+    continuous_nums = []
+    temp = []
+    for num in nums:
+        if not temp or num == temp[-1] + 1:
+            temp.append(num)
+        else:
+            if len(temp) >= 2:
+                continuous_nums.extend(temp)
+            temp = [num]
+    if len(temp) >= 2:
+        continuous_nums.extend(temp)
+
+    # 将整数转换为十六进制字符串
+    result = [format(num, '02x') for num in continuous_nums]
+
+    return result
+
+
+aa = ['cb', '00', '01', '02', '03', 'de', '04', '05', '06', 'ab', '07', '08', '09', '0a', '00', '01', '02', '04', '05']
+result = remove_non_continuous_elements(aa)
+print(result)
