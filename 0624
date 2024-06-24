@@ -1,0 +1,310 @@
+<template>
+  <div>
+    <el-row>
+      <el-col :span="7" style="display: flex; align-items: center">
+        <div style="width: 100px">选择时间：</div>
+        <el-date-picker
+          v-model="dataRange"
+          type="daterange"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
+        />
+      </el-col>
+      <el-col :span="7" style="display: flex; align-items: center">
+        <span style="width: 100px; margin-left: 10px">目标筛选: </span>
+        <el-input v-model="target"></el-input>
+      </el-col>
+      <el-col :span="4">
+        <el-button style="margin-left: 10px" type="primary" @click="search"
+          >查询</el-button
+        >
+      </el-col>
+      <el-col :span="6">
+        <el-button
+          style="margin-left: 10px"
+          type="primary"
+          @click="dialogVisible = true"
+          >提交目标</el-button
+        >
+      </el-col>
+    </el-row>
+    <div style="display: flex">
+      <div class="second-box">
+        <div style="font-weight: bold">文件列表</div>
+        <div
+          class="list"
+          v-for="(item, index) in tableData"
+          :key="index"
+          :class="{
+            'is-active': activeIndex == index,
+            'is-target': item.isTarget,
+          }"
+          @click="changeTable(item, index)"
+        >
+          {{ item.filename }}
+        </div>
+      </div>
+      <div class="second-box">
+        <div style="font-weight: bold">文件内容</div>
+        <div style="margin-top: 20px">{{ content }}</div>
+      </div>
+      <div class="second-box">
+        <div style="font-weight: bold">译文内容</div>
+        <div style="margin-top: 20px">{{ tran_content }}</div>
+      </div>
+    </div>
+
+    <div style="display: flex; margin-top: 20px">
+      <div ref="echartsRef" style="width: 50%; height: 400px"></div>
+      <div style="width: 60%; height: 400px">
+        <MapPage :addrList="addrList" />
+      </div>
+    </div>
+    <el-dialog v-model="dialogVisible" title="目标提取" width="500">
+      <el-input
+        v-model="targetValue"
+        placeholder="多个目标用逗号分隔例如：aa,bb"
+      ></el-input>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitTarget"> 确认 </el-button>
+        </div>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, ref } from "vue"; // 导入Vue库中的响应式相关函数
+import * as echarts from "echarts"; // 导入echarts库
+import axios from "axios"; // 导入axios库，用于发送HTTP请求
+import MapPage from "./MapPage.vue"; // 导入地图页面组件
+
+// 声明并初始化响应式变量
+const tableData = ref([]); // 表格数据
+const echartsRef = ref(null); // 图表的引用
+
+// 初始化图表
+const initGraphCharts = (tableData) => {
+  const list = [];
+  const dataList = [];
+
+  // 构造节点和边数据
+  tableData.forEach((item) => {
+    list.push({
+      source: item.source,
+      target: item.target,
+    });
+    dataList.push(item.source, item.target);
+  });
+
+  // 去除重复节点
+  const dataList2 = [...new Set(dataList)];
+
+  // echarts所需的数据格式
+  const data = dataList2.map((item) => {
+    return { name: item };
+  });
+  console.log(data, list, "data");
+
+  // 初始化echarts图表
+  const graphTwoChart = echarts.init(echartsRef.value);
+
+  // 设置echarts图表的配置项
+  graphTwoChart.setOption({
+    title: {
+      textStyle: {
+        color: "white",
+      },
+      left: "30px",
+      top: "20px",
+    },
+    tooltip: {
+      show: true,
+    },
+    legend: {
+      show: false,
+    },
+    xAxis: {
+      show: false,
+    },
+    yAxis: {
+      show: false,
+    },
+    grid: {
+      top: "80px",
+    },
+    series: [
+      {
+        type: "graph",
+        roam: true,
+        focusNodeAdjacency: true,
+        force: {
+          repulsion: 300,
+          edgeLength: [120, 100],
+        },
+        layout: "force",
+        symbol: "circle",
+        normal: {
+          lineStyle: {
+            opacity: 0.5,
+            curveness: 1,
+          },
+        },
+        label: {
+          normal: {
+            show: true,
+            position: "inside",
+            // 文本样式
+            textStyle: {
+              fontSize: 16,
+              color: "white",
+            },
+          },
+        },
+        edgeLabel: {
+          normal: {
+            show: false,
+          },
+        },
+        symbolSize: 50,
+        data: data,
+        links: list,
+      },
+    ],
+  });
+};
+
+const dataRange = ref([]); // 时间范围
+const target = ref(""); // 目标
+const addrList = ref([]); // 地址列表
+
+// 初始化数据
+const initData = () => {
+  // 初始化时间范围
+  const date_min = dataRange.value.length > 0 ? dataRange.value[0] : "";
+  const date_max = dataRange.value.length > 0 ? dataRange.value[1] : "";
+
+  // 发送HTTP请求获取数据
+  axios
+    .get(
+      `http://127.0.0.1:3060/api/meteors?date_min=${date_min}&date_max=${date_max}&target=${target.value}`
+    )
+    .then((res) => {
+      console.log(res, "meteors");
+      if (res.data.code == 200) {
+        // 更新表格数据
+        tableData.value = res.data.data;
+        // 构造地址列表
+        addrList.value = res.data.data.map((item) => {
+          return {
+            lat: item.m_lat,
+            lon: item.m_lon,
+          };
+        });
+        // 初始化图表
+        initGraphCharts(tableData.value);
+        console.log(addrList, "addrList");
+      }
+    });
+};
+
+const activeIndex = ref("-1"); // 活跃索引
+const tran_content = ref(""); // 译文内容
+const content = ref(""); // 原始内容
+
+// 切换表格数据
+const changeTable = (item, index) => {
+  activeIndex.value = index;
+  content.value = item.content;
+  tran_content.value = item.tran_content;
+  addrList.value = [
+    {
+      lat: item.m_lat,
+      lon: item.m_lon,
+    },
+  ];
+  initGraphCharts([item]);
+};
+
+// 搜索函数
+const search = () => {
+  initData();
+};
+
+const dialogVisible = ref(false); // 对话框是否可见
+const targetValue = ref(""); // 目标值
+
+// 提交目标
+const submitTarget = () => {
+  dialogVisible.value = false;
+
+  // 拆分目标值，将匹配的数据标记为目标
+  const list = targetValue.value.split(",");
+  if (targetValue.value == "") {
+    tableData.value.forEach((item) => {
+      item.isTarget = false;
+    });
+    return;
+  }
+  if (list.length > 0) {
+    tableData.value.forEach((item) => {
+      list.forEach((ele) => {
+        if (ele === item.target || ele === item.source) {
+          item.isTarget = true;
+        }
+      });
+    });
+  }
+};
+
+// 在组件挂载后初始化数据
+onMounted(() => {
+  initData();
+});
+</script>
+
+<style scoped>
+h3 {
+  margin: 40px 0 0;
+}
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+li {
+  display: inline-block;
+  margin: 0 10px;
+}
+a {
+  color: #42b983;
+}
+.list {
+  border-bottom: 1px solid #ebeef5;
+  text-align: center;
+  height: 35px;
+  line-height: 35px;
+  cursor: pointer;
+}
+
+.second-box {
+  width: 32%;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 14px;
+  height: 400px;
+  overflow-y: auto;
+  margin-right: 20px;
+  margin-top: 20px;
+}
+.el-input {
+  width: 300px;
+}
+.is-active {
+  background: #eaeaea;
+}
+.is-target {
+  color: red;
+}
+</style>
