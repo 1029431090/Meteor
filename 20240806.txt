@@ -1,0 +1,5 @@
+https://blog.csdn.net/Robin_Pi/article/details/109027354
+https://github.com/wiseman/py-webrtcvad/blob/master/example.py
+
+https://blog.csdn.net/weixin_42302340/article/details/106064305
+https://github.com/zlzhang1124/voice_activity_detection
